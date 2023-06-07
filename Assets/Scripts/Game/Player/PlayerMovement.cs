@@ -3,35 +3,41 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-public class PlayerMovement : MonoBehaviour
+public class PlayerMovement : TimeControlledCharacter
 {
     [SerializeField] private float _speed;
 
-    [SerializeField] private float _rotationSpeed; // in degrees, but they are multiplied by fixedDeltaTime
+    [SerializeField] private float _rotationSpeed; // in degrees / frame
 
-    private Rigidbody2D _rigidbody;
+
     private Vector2 _movementInput;
 
     private void Awake()
     {
-        _rigidbody = GetComponent<Rigidbody2D>();
+        rigidbody = GetComponent<Rigidbody2D>();
+    }
+
+    public override void TimeUpdate()
+    {
+        MovePlayerPosition();
+        RotateTowardsMouse();
     }
 
     private void FixedUpdate()
     {
         //SetPlayerVelocity();
-        MovePlayerPosition();
-        RotateTowardsMouse();
+        //MovePlayerPosition();
+        //RotateTowardsMouse();
     }
 
     private void SetPlayerVelocity()
     {
-        _rigidbody.velocity = _movementInput * _speed;
+        rigidbody.velocity = _movementInput * _speed;
     }
 
     private void MovePlayerPosition()
     {
-        _rigidbody.MovePosition(_rigidbody.position + _movementInput * _speed * Time.fixedDeltaTime);
+        rigidbody.MovePosition(rigidbody.position + _movementInput * _speed * Time.fixedDeltaTime);
     }
 
     private void OnMove(InputValue inputValue)
@@ -42,25 +48,25 @@ public class PlayerMovement : MonoBehaviour
     private void RotateTowardsMouse()
     {
         Vector2 mousePos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-        Vector2 mouseDir = mousePos - _rigidbody.position;
+        Vector2 mouseDir = mousePos - rigidbody.position;
         float desiredAngle = Mathf.Atan2(mouseDir.y, mouseDir.x) * Mathf.Rad2Deg;
-        float angleDiff = desiredAngle - _rigidbody.rotation;
+        float angleDiff = desiredAngle - rigidbody.rotation;
         int rotationDirection = (angleDiff > 0) ? 1 : -1;
-        if ((_rigidbody.rotation > 90 && desiredAngle < -90) || (_rigidbody.rotation < -90 && desiredAngle > 90))
+        if ((rigidbody.rotation > 90 && desiredAngle < -90) || (rigidbody.rotation < -90 && desiredAngle > 90))
         {
             rotationDirection *= -1;
         }
         if (Mathf.Abs(angleDiff) > 360)
         {
-            _rigidbody.rotation += 360 * Mathf.Sign(angleDiff);
-            angleDiff = desiredAngle - _rigidbody.rotation;
+            rigidbody.rotation += 360 * Mathf.Sign(angleDiff);
+            angleDiff = desiredAngle - rigidbody.rotation;
             rotationDirection = (angleDiff > 0) ? 1 : -1;
         }
         if (Mathf.Abs(angleDiff) > _rotationSpeed * Time.fixedDeltaTime)
         {
-            _rigidbody.rotation += _rotationSpeed * rotationDirection * Time.fixedDeltaTime;
+            rigidbody.rotation += _rotationSpeed * rotationDirection * Time.fixedDeltaTime;
         } else {
-            _rigidbody.rotation = desiredAngle;
+            rigidbody.rotation = desiredAngle;
         }
 
         /*
