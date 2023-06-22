@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Data;
 using UnityEditor.MemoryProfiler;
 using UnityEngine;
 
@@ -156,30 +157,7 @@ public class TimeController : MonoBehaviour
                 recordIndex--;
                 Debug.Log(recordIndex);
             }
-            for (int characterIndex = 0; characterIndex < timeCharacters.Length; characterIndex++)
-            {
-                TimeControlledCharacter character = timeCharacters[characterIndex];
-                character.rigidbody = character.GetComponent<Rigidbody2D>();
-                RecordedData data = recordedData[characterIndex, recordIndex];
-                RecordedData dataNext = recordedData[characterIndex, recordIndex + 1];
-
-                float timeRatio = (timeKeeper.objectiveTime - timeStamps[recordIndex]) / (timeStamps[recordIndex + 1] - timeStamps[recordIndex]);
-
-                character.rigidbody.position = Vector2.Lerp(data.position, dataNext.position, timeRatio);
-                //character.rigidbody.rotation = Mathf.Lerp(data.rotation, dataNext.rotation, timeRatio);
-                character.rigidbody.rotation = data.rotation;
-            }
-
-            /*
-            for (int characterIndex = 0; characterIndex < timeCharacters.Length; characterIndex++)
-            {
-                TimeControlledCharacter character = timeCharacters[characterIndex];
-                character.rigidbody = character.GetComponent<Rigidbody2D>();
-                RecordedData data = recordedData[characterIndex, recordIndex];
-                character.rigidbody.position = data.position;
-                character.rigidbody.rotation = data.rotation;
-            }
-            */
+            InterpolateTimeCharacters();
         }
     }
     void StepForward()
@@ -188,18 +166,53 @@ public class TimeController : MonoBehaviour
         {
             timeKeeper.TimeUpdate(Time.deltaTime);
         }
-        wasSteppingBack = true;
+        wasSteppingBack = true; // probably isn't needed (its already true)
         if (recordIndex < recordCount - 1)
         {
-            recordIndex++;
-            for (int characterIndex = 0; characterIndex < timeCharacters.Length; characterIndex++)
+            if (timeKeeper.objectiveTime >= timeStamps[recordIndex + 1])
             {
-                TimeControlledCharacter character = timeCharacters[characterIndex];
-                character.rigidbody = character.GetComponent<Rigidbody2D>();
-                RecordedData data = recordedData[characterIndex, recordIndex];
-                character.rigidbody.position = data.position;
-                character.rigidbody.rotation = data.rotation;
+                recordIndex++;
+                Debug.Log(recordIndex);
+            }
+            InterpolateTimeCharacters();
+        }
+    }
+
+    void InterpolateTimeCharacters()
+    {
+        for (int characterIndex = 0; characterIndex < timeCharacters.Length; characterIndex++)
+        {
+            TimeControlledCharacter character = timeCharacters[characterIndex];
+            character.rigidbody = character.GetComponent<Rigidbody2D>();
+            RecordedData data = recordedData[characterIndex, recordIndex];
+            RecordedData dataNext = recordedData[characterIndex, recordIndex + 1];
+
+            float timeRatio = (timeKeeper.objectiveTime - timeStamps[recordIndex]) / (timeStamps[recordIndex + 1] - timeStamps[recordIndex]);
+
+            character.rigidbody.position = Vector2.Lerp(data.position, dataNext.position, timeRatio);
+            character.rigidbody.rotation = InterpolateRotation(data.rotation, dataNext.rotation, timeRatio);
+        }
+    }
+
+    float InterpolateRotation(float rot1, float rot2, float ratio)
+    {
+        float rotRes = 0;
+        if ((rot1 > 90 && rot2 < -90) || (rot1 < -90 && rot2 > 90))
+        {
+            if (rot2 < -90)
+            {
+                rot2 += 360;
+            }
+            else
+            {
+                rot1 += 360;
             }
         }
+        rotRes = Mathf.Lerp(rot1, rot2, ratio);
+        if (rotRes > 180)
+        {
+            rotRes -= 360;
+        }
+        return rotRes;
     }
 }
