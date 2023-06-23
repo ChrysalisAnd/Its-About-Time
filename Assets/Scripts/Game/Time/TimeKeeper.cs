@@ -36,7 +36,6 @@ public class TimeKeeper : MonoBehaviour
         if (objectiveTime > lastRecordTime + recordDelay)
         {
             lastRecordTime = objectiveTime;
-            //Debug.Log("recording: " + objectiveTime);
             return true;
         }
 

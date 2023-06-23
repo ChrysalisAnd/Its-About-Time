@@ -56,3 +56,6 @@ TagManager:
   - name: Enemie
     uniqueID: 2817848483
     locked: 0
+  - name: Cursor
+    uniqueID: 321027551
+    locked: 0

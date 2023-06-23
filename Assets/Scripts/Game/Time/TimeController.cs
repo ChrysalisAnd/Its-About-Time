@@ -1,25 +1,40 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Data;
+#if UNITY_EDITOR
 using UnityEditor.MemoryProfiler;
+#endif
 using UnityEngine;
+using UnityEngine.TextCore.Text;
 
 public class TimeController : MonoBehaviour
 {
-    public struct RecordedData
+    public struct RecordCharacter
     {
         public Vector2 position;
         public float rotation;
     }
 
+    public struct RecordBullet
+    {
+        public Vector2 position;
+        public float rotation;
+        //public bool state; // true - start, false - end
+    }
+
+
+    public int bulletIndex;
+
     [SerializeField] private TimeKeeper timeKeeper;
+    [SerializeField] private BulletPool bulletPool;
 
     float[] timeStamps;
-    RecordedData[,] recordedData; //TODO? rewrite to list. Probaly list of lists. For memory reasons
-    int recordMax = 100000; // 27 mins if fps = 60 and recording every frame
+    RecordCharacter[,] recordedCharacters; //TODO? rewrite to list. Probaly list of lists. For memory reasons
+    RecordBullet[,] recordedBullets;
+    int recordMax = 20000; // 4000 secs if fps = 50
     int recordIndex;
     int recordCount;
-    int prevRecordIndex; // to know correct interval in records for interpolation
+
 
     [SerializeField] private int framesBetweenRecords;
     private float recordDelay;
@@ -28,14 +43,17 @@ public class TimeController : MonoBehaviour
 
     float currentTimeLineEndTime = 0; // for time keeper
 
-    TimeControlledCharacter[] timeCharacters;
+    TimeCharacter[] timeCharacters;
 
     private void Awake()
     {
-        timeCharacters = GameObject.FindObjectsOfType<TimeControlledCharacter>();
-        recordedData = new RecordedData[timeCharacters.Length, recordMax];
+        timeCharacters = GameObject.FindObjectsOfType<TimeCharacter>();
+        recordedCharacters = new RecordCharacter[timeCharacters.Length, recordMax];
         timeStamps = new float[recordMax];
         recordDelay = 0.02f * framesBetweenRecords; // 0.02 because assuming 50 frames
+
+        recordedBullets = new RecordBullet[bulletPool.Size, recordMax];
+
     }
     // Start is called before the first frame update
     void Start()
@@ -56,7 +74,6 @@ public class TimeController : MonoBehaviour
         Time.fixedDeltaTime = Time.timeScale * 0.02f;
     }
 
-    // Update is called once per frame
     void Update()
     {
 
@@ -64,7 +81,7 @@ public class TimeController : MonoBehaviour
         bool stepBack = Input.GetKey(KeyCode.LeftArrow);
         bool stepForward = Input.GetKey(KeyCode.RightArrow);
         bool slowDown = Input.GetKey(KeyCode.Space);
-        if (slowDown)
+        if (slowDown) // make it based on events to not check every frame?
         {
             ChangeTimeScale();
         }
@@ -89,14 +106,25 @@ public class TimeController : MonoBehaviour
     {
         for (int characterIndex = 0; characterIndex < timeCharacters.Length; characterIndex++)
         {
-            TimeControlledCharacter character = timeCharacters[characterIndex];
+            TimeCharacter character = timeCharacters[characterIndex];
             character.rigidbody = character.GetComponent<Rigidbody2D>();
-            RecordedData data = new RecordedData(); // maybe make constuctor?
+            RecordCharacter data = new RecordCharacter(); // maybe make constuctor?
             data.position = character.rigidbody.position;
             data.rotation = character.rigidbody.rotation;
-            recordedData[characterIndex, recordCount] = data;
-            timeStamps[recordCount] = timeKeeper.objectiveTime;
+            recordedCharacters[characterIndex, recordCount] = data;
         }
+        
+        for (int bulletIndex = 0; bulletIndex < bulletPool.Size; bulletIndex++)
+        {
+            GameObject bullet = bulletPool.bulletPool[bulletIndex];
+            Rigidbody2D rb = bullet.GetComponent<Rigidbody2D>();
+            RecordBullet data = new RecordBullet();
+            data.position = rb.position;
+            data.rotation = rb.rotation;
+            recordedBullets[bulletIndex, recordCount] = data;
+        }
+
+        timeStamps[recordCount] = timeKeeper.objectiveTime;
         recordCount++;
         recordIndex = recordCount;
     }
@@ -110,6 +138,7 @@ public class TimeController : MonoBehaviour
             wasSteppingBack = false;
             
             recordCount = recordIndex;
+            bulletPool.ReactivateBullets();
             timeKeeper.lastRecordTime = timeKeeper.objectiveTime;
         }
         if (timeKeeper.IsRecordNeeded(recordDelay))
@@ -118,29 +147,12 @@ public class TimeController : MonoBehaviour
             //Debug.Log(recordedData[0, recordCount - 1].position);
         }
 
-        foreach (TimeControlledCharacter timeCharacter in timeCharacters)
+        foreach (TimeCharacter timeCharacter in timeCharacters)
         {
             timeCharacter.TimeUpdate();
         }
     }
-    /*
-    void WipeTailTimeLine()
-    {
-        for (int characterIndex = 0; characterIndex < timeCharacters.Length; characterIndex++)
-        {
-            for (int i = recordIndex + 1; i < recordCount; i++)
-            {
-                recordedData[characterIndex, i] = 0;
-            }
-            TimeControlledCharacter character = timeCharacters[characterIndex];
-            character.rigidbody = character.GetComponent<Rigidbody2D>();
-            RecordedData data = new RecordedData(); // maybe make constuctor?
-            data.position = character.rigidbody.position;
-            data.rotation = character.rigidbody.rotation;
-            recordedData[characterIndex, recordCount] = data;
-            timeStamps[recordCount] = timeKeeper.objectiveTime;
-        }
-    }*/
+
     void StepBack()
     {
         timeKeeper.TimeUpdate(Time.deltaTime * (-1));
@@ -158,6 +170,7 @@ public class TimeController : MonoBehaviour
                 Debug.Log(recordIndex);
             }
             InterpolateTimeCharacters();
+            InterpolateBullets();
         }
     }
     void StepForward()
@@ -175,6 +188,7 @@ public class TimeController : MonoBehaviour
                 Debug.Log(recordIndex);
             }
             InterpolateTimeCharacters();
+            InterpolateBullets();
         }
     }
 
@@ -182,16 +196,44 @@ public class TimeController : MonoBehaviour
     {
         for (int characterIndex = 0; characterIndex < timeCharacters.Length; characterIndex++)
         {
-            TimeControlledCharacter character = timeCharacters[characterIndex];
+            TimeCharacter character = timeCharacters[characterIndex];
             character.rigidbody = character.GetComponent<Rigidbody2D>();
-            RecordedData data = recordedData[characterIndex, recordIndex];
-            RecordedData dataNext = recordedData[characterIndex, recordIndex + 1];
+            RecordCharacter data = recordedCharacters[characterIndex, recordIndex];
+            RecordCharacter dataNext = recordedCharacters[characterIndex, recordIndex + 1];
 
             float timeRatio = (timeKeeper.objectiveTime - timeStamps[recordIndex]) / (timeStamps[recordIndex + 1] - timeStamps[recordIndex]);
 
             character.rigidbody.position = Vector2.Lerp(data.position, dataNext.position, timeRatio);
             character.rigidbody.rotation = InterpolateRotation(data.rotation, dataNext.rotation, timeRatio);
         }
+    }
+    
+    void InterpolateBullets()
+    {
+
+        for (int bulletIndex = 0; bulletIndex < bulletPool.Size; bulletIndex++)
+        {
+            RecordBullet data = recordedBullets[bulletIndex, recordIndex];
+            RecordBullet dataNext = recordedBullets[bulletIndex, recordIndex + 1];
+            GameObject bullet = bulletPool.bulletPool[bulletIndex];
+            Rigidbody2D rb = bullet.GetComponent<Rigidbody2D>();
+            rb.isKinematic = true;
+            float timeRatio = (timeKeeper.objectiveTime - timeStamps[recordIndex]) / (timeStamps[recordIndex + 1] - timeStamps[recordIndex]);
+            rb.position = Vector2.Lerp(data.position, dataNext.position, timeRatio);
+            rb.rotation = data.rotation;
+
+            if (data.position == BulletPool.restPosition)
+            {
+                rb.position = BulletPool.restPosition;
+                rb.rotation = 0;
+            }
+            else if (dataNext.position == BulletPool.restPosition)
+            {
+                rb.position = BulletPool.restPosition;
+                rb.rotation = 0;
+            }
+        }
+
     }
 
     float InterpolateRotation(float rot1, float rot2, float ratio)
@@ -215,4 +257,5 @@ public class TimeController : MonoBehaviour
         }
         return rotRes;
     }
+
 }

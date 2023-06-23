@@ -12,41 +12,34 @@ public class PlayerShoot : MonoBehaviour
     [SerializeField] private float timeBetweenShots;
 
     private float lastFireTime;
+
+    private TimeController timeController;
+    private TimeKeeper timeKeeper;
+    private BulletPool bulletPool;
+    private Rigidbody2D playerBody;
     
     void Start()
     {
         lastFireTime = Time.time;
+        timeController = GameObject.FindObjectOfType<TimeController>();
+        timeKeeper = GameObject.FindObjectOfType<TimeKeeper>();
+        bulletPool = GameObject.FindObjectOfType<BulletPool>();
+        playerBody = GetComponent<Rigidbody2D>();
     }
 
 
-    private void FireBullet()
-    {
-        GameObject bullet = Instantiate(bulletPrefab,
-            gunOffset.position, transform.rotation);
-        Rigidbody2D bulletRigidBody = bullet.GetComponent<Rigidbody2D>();
-        Rigidbody2D playerRigidBody = GetComponent<Rigidbody2D>();
-        bulletRigidBody.velocity = bulletSpeed * DegreeToVector2(playerRigidBody.rotation);
-    }
 
     private void OnFire(InputValue inputValue)
     {
         float timeSinceLastFire = Time.time - lastFireTime;
         if (timeSinceLastFire > timeBetweenShots)
         {
-            FireBullet();
+            bulletPool.shootBullet(gunOffset.position, playerBody.rotation);
             lastFireTime = Time.time;
+
         }
 
     }
 
-    public static Vector2 RadianToVector2(float radian)
-    {
-        return new Vector2(Mathf.Cos(radian), Mathf.Sin(radian));
-    }
-
-    public static Vector2 DegreeToVector2(float degree)
-    {
-        return RadianToVector2(degree * Mathf.Deg2Rad);
-    }
 
 }

@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class TimeControlledCharacter : MonoBehaviour
+public class TimeCharacter : MonoBehaviour
 {
     public new Rigidbody2D rigidbody;
     public Vector2 position;

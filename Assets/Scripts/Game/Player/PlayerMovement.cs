@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-public class PlayerMovement : TimeControlledCharacter
+public class PlayerMovement : TimeCharacter
 {
     [SerializeField] private float _speed;
 
@@ -68,14 +68,6 @@ public class PlayerMovement : TimeControlledCharacter
         } else {
             rigidbody.rotation = desiredAngle;
         }
-
-        /*
-        if (Mathf.Abs(_rigidbody.rotation) >= 360)
-        {
-            _rigidbody.rotation -= 360 * Mathf.Sign(_rigidbody.rotation);
-        }
-        Debug.Log("curr: " + _rigidbody.rotation + " diff: " + angleDiff);
-        */
     }
 
 }
